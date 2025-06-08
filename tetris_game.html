@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テトリスゲーム</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .game-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        
+        h1 {
+            color: white;
+            margin: 0 0 20px 0;
+            font-size: 2.5em;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .game-area {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        
+        canvas {
+            border: 3px solid white;
+            border-radius: 10px;
+            background: #1a1a2e;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .info-panel {
+            color: white;
+            text-align: left;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(5px);
+            min-width: 150px;
+        }
+        
+        .score {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .controls {
+            font-size: 0.9em;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+        
+        .controls h3 {
+            margin: 0 0 10px 0;
+            color: #ffd700;
+        }
+        
+        .touch-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 50px);
+            gap: 5px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        
+        .control-btn:hover, .control-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+        
+        .rotate-btn {
+            grid-column: 2;
+        }
+        
+        .drop-btn {
+            grid-column: 1 / 4;
+            margin-top: 5px;
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+        
+        .restart-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: transform 0.2s;
+        }
+        
+        .restart-btn:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🎮 テトリス</h1>
+        <div class="game-area">
+            <canvas id="gameCanvas" width="300" height="600"></canvas>
+            <div class="info-panel">
+                <div class="score">
+                    スコア: <span id="score">0</span>
+                </div>
+                <div class="controls">
+                    <h3>操作方法</h3>
+                    <div><strong>キーボード:</strong></div>
+                    <div>← → または A D : 移動</div>
+                    <div>↓ または S : 早く落とす</div>
+                    <div>↑ または W : 回転</div>
+                    <div>スペース : 一気に落とす</div>
+                    <div style="margin-top: 15px;"><strong>タッチ操作:</strong></div>
+                </div>
+                <div class="touch-controls">
+                    <div class="control-btn" id="leftBtn">←</div>
+                    <div class="control-btn rotate-btn" id="rotateBtn">↻</div>
+                    <div class="control-btn" id="rightBtn">→</div>
+                    <div class="control-btn" id="downBtn">↓</div>
+                    <div class="control-btn drop-btn" id="dropBtn">DROP</div>
+                </div>
+            </div>
+        </div>
+        <div class="game-over" id="gameOver">
+            <h2>ゲームオーバー</h2>
+            <p>最終スコア: <span id="finalScore">0</span></p>
+            <button class="restart-btn" onclick="restartGame()">もう一度プレイ</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+
+        // ゲーム設定
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+        const BLOCK_SIZE = 30;
+        
+        // ゲーム状態
+        let board = [];
+        let currentPiece = null;
+        let score = 0;
+        let gameRunning = true;
+        let dropTime = 0;
+        let dropSpeed = 500; // ミリ秒
+
+        // 効果音用のAudioContext
+        let audioContext;
+        
+        function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.log('Audio not supported');
+            }
+        }
+        
+        function playSound(frequency, duration, type = 'sine') {
+            if (!audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // テトリスピース定義
+        const PIECES = [
+            { // I
+                shape: [[1,1,1,1]],
+                color: '#00f5ff'
+            },
+            { // O
+                shape: [[1,1],[1,1]],
+                color: '#ffff00'
+            },
+            { // T
+                shape: [[0,1,0],[1,1,1]],
+                color: '#a000f0'
+            },
+            { // S
+                shape: [[0,1,1],[1,1,0]],
+                color: '#00ff00'
+            },
+            { // Z
+                shape: [[1,1,0],[0,1,1]],
+                color: '#ff0000'
+            },
+            { // J
+                shape: [[1,0,0],[1,1,1]],
+                color: '#0000ff'
+            },
+            { // L
+                shape: [[0,0,1],[1,1,1]],
+                color: '#ff8800'
+            }
+        ];
+
+        // ボード初期化
+        function initBoard() {
+            board = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+        }
+
+        // 新しいピース生成
+        function createPiece() {
+            const pieceType = PIECES[Math.floor(Math.random() * PIECES.length)];
+            return {
+                shape: pieceType.shape,
+                color: pieceType.color,
+                x: Math.floor(BOARD_WIDTH / 2) - Math.floor(pieceType.shape[0].length / 2),
+                y: 0
+            };
+        }
+
+        // 衝突判定
+        function isValidMove(piece, dx, dy, newShape = null) {
+            const shape = newShape || piece.shape;
+            const newX = piece.x + dx;
+            const newY = piece.y + dy;
+            
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const boardX = newX + x;
+                        const boardY = newY + y;
+                        
+                        if (boardX < 0 || boardX >= BOARD_WIDTH || 
+                            boardY >= BOARD_HEIGHT || 
+                            (boardY >= 0 && board[boardY][boardX])) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        // ピース回転
+        function rotatePiece(piece) {
+            const rotated = piece.shape[0].map((_, index) =>
+                piece.shape.map(row => row[index]).reverse()
+            );
+            
+            if (isValidMove(piece, 0, 0, rotated)) {
+                piece.shape = rotated;
+                playSound(440, 0.1); // 回転音
+            }
+        }
+
+        // ピースをボードに固定
+        function placePiece(piece) {
+            for (let y = 0; y < piece.shape.length; y++) {
+                for (let x = 0; x < piece.shape[y].length; x++) {
+                    if (piece.shape[y][x]) {
+                        const boardY = piece.y + y;
+                        const boardX = piece.x + x;
+                        if (boardY >= 0) {
+                            board[boardY][boardX] = piece.color;
+                        }
+                    }
+                }
+            }
+            playSound(220, 0.2); // 配置音
+        }
+
+        // ライン消去
+        function clearLines() {
+            let linesCleared = 0;
+            
+            for (let y = BOARD_HEIGHT - 1; y >= 0; y--) {
+                if (board[y].every(cell => cell !== 0)) {
+                    board.splice(y, 1);
+                    board.unshift(Array(BOARD_WIDTH).fill(0));
+                    linesCleared++;
+                    y++; // 同じ行を再チェック
+                }
+            }
+            
+            if (linesCleared > 0) {
+                score += linesCleared * 100 * linesCleared; // ボーナス
+                scoreElement.textContent = score;
+                playSound(660, 0.3); // ライン消去音
+                
+                // スピードアップ
+                if (score > 0 && score % 1000 === 0) {
+                    dropSpeed = Math.max(50, dropSpeed - 50);
+                }
+            }
+        }
+
+        // ハードドロップ
+        function hardDrop(piece) {
+            while (isValidMove(piece, 0, 1)) {
+                piece.y++;
+            }
+            playSound(330, 0.15); // ハードドロップ音
+        }
+
+        // 描画
+        function draw() {
+            // 背景クリア
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // グリッド描画
+            ctx.strokeStyle = '#333366';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= BOARD_WIDTH; x++) {
+                ctx.beginPath();
+                ctx.moveTo(x * BLOCK_SIZE, 0);
+                ctx.lineTo(x * BLOCK_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= BOARD_HEIGHT; y++) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * BLOCK_SIZE);
+                ctx.lineTo(canvas.width, y * BLOCK_SIZE);
+                ctx.stroke();
+            }
+            
+            // ボード描画
+            for (let y = 0; y < BOARD_HEIGHT; y++) {
+                for (let x = 0; x < BOARD_WIDTH; x++) {
+                    if (board[y][x]) {
+                        ctx.fillStyle = board[y][x];
+                        ctx.fillRect(x * BLOCK_SIZE + 1, y * BLOCK_SIZE + 1, 
+                                   BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                        
+                        // ハイライト効果
+                        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                        ctx.fillRect(x * BLOCK_SIZE + 1, y * BLOCK_SIZE + 1, 
+                                   BLOCK_SIZE - 2, 5);
+                    }
+                }
+            }
+            
+            // 現在のピース描画
+            if (currentPiece) {
+                ctx.fillStyle = currentPiece.color;
+                for (let y = 0; y < currentPiece.shape.length; y++) {
+                    for (let x = 0; x < currentPiece.shape[y].length; x++) {
+                        if (currentPiece.shape[y][x]) {
+                            const drawX = (currentPiece.x + x) * BLOCK_SIZE;
+                            const drawY = (currentPiece.y + y) * BLOCK_SIZE;
+                            ctx.fillRect(drawX + 1, drawY + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                            
+                            // ハイライト効果
+                            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                            ctx.fillRect(drawX + 1, drawY + 1, BLOCK_SIZE - 2, 5);
+                            ctx.fillStyle = currentPiece.color;
+                        }
+                    }
+                }
+            }
+        }
+
+        // ゲームオーバー判定
+        function isGameOver() {
+            return currentPiece && !isValidMove(currentPiece, 0, 0);
+        }
+
+        // ゲームオーバー処理
+        function gameOver() {
+            gameRunning = false;
+            finalScoreElement.textContent = score;
+            gameOverElement.style.display = 'block';
+            playSound(150, 1, 'sawtooth'); // ゲームオーバー音
+        }
+
+        // ゲーム再開
+        function restartGame() {
+            initBoard();
+            currentPiece = createPiece();
+            score = 0;
+            scoreElement.textContent = score;
+            dropSpeed = 500;
+            gameRunning = true;
+            gameOverElement.style.display = 'none';
+            dropTime = 0;
+        }
+
+        // キーボード入力
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning || !currentPiece) return;
+            
+            // イベントのデフォルト動作を防ぐ
+            e.preventDefault();
+            
+            switch(e.key.toLowerCase()) {
+                case 'arrowleft':
+                case 'a':
+                    if (isValidMove(currentPiece, -1, 0)) {
+                        currentPiece.x--;
+                        playSound(330, 0.05);
+                    }
+                    break;
+                case 'arrowright':
+                case 'd':
+                    if (isValidMove(currentPiece, 1, 0)) {
+                        currentPiece.x++;
+                        playSound(330, 0.05);
+                    }
+                    break;
+                case 'arrowdown':
+                case 's':
+                    if (isValidMove(currentPiece, 0, 1)) {
+                        currentPiece.y++;
+                        playSound(220, 0.05);
+                    }
+                    break;
+                case 'arrowup':
+                case 'w':
+                    rotatePiece(currentPiece);
+                    break;
+                case ' ':
+                    hardDrop(currentPiece);
+                    break;
+            }
+        });
+
+        // タッチ操作
+        function setupTouchControls() {
+            const leftBtn = document.getElementById('leftBtn');
+            const rightBtn = document.getElementById('rightBtn');
+            const downBtn = document.getElementById('downBtn');
+            const rotateBtn = document.getElementById('rotateBtn');
+            const dropBtn = document.getElementById('dropBtn');
+
+            leftBtn.addEventListener('click', () => {
+                if (gameRunning && currentPiece && isValidMove(currentPiece, -1, 0)) {
+                    currentPiece.x--;
+                    playSound(330, 0.05);
+                }
+            });
+
+            rightBtn.addEventListener('click', () => {
+                if (gameRunning && currentPiece && isValidMove(currentPiece, 1, 0)) {
+                    currentPiece.x++;
+                    playSound(330, 0.05);
+                }
+            });
+
+            downBtn.addEventListener('click', () => {
+                if (gameRunning && currentPiece && isValidMove(currentPiece, 0, 1)) {
+                    currentPiece.y++;
+                    playSound(220, 0.05);
+                }
+            });
+
+            rotateBtn.addEventListener('click', () => {
+                if (gameRunning && currentPiece) {
+                    rotatePiece(currentPiece);
+                }
+            });
+
+            dropBtn.addEventListener('click', () => {
+                if (gameRunning && currentPiece) {
+                    hardDrop(currentPiece);
+                }
+            });
+        }
+
+        // ゲームループ
+        function gameLoop(currentTime) {
+            if (!gameRunning) return;
+            
+            if (currentTime - dropTime > dropSpeed) {
+                if (!currentPiece) {
+                    currentPiece = createPiece();
+                    if (isGameOver()) {
+                        gameOver();
+                        return;
+                    }
+                } else {
+                    if (isValidMove(currentPiece, 0, 1)) {
+                        currentPiece.y++;
+                    } else {
+                        placePiece(currentPiece);
+                        clearLines();
+                        currentPiece = null;
+                    }
+                }
+                dropTime = currentTime;
+            }
+            
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ゲーム開始
+        function startGame() {
+            // ユーザー操作後にオーディオを初期化
+            document.addEventListener('click', initAudio, { once: true });
+            document.addEventListener('keydown', initAudio, { once: true });
+            
+            // タッチ操作のセットアップ
+            setupTouchControls();
+            
+            initBoard();
+            currentPiece = createPiece();
+            requestAnimationFrame(gameLoop);
+        }
+
+        startGame();
+    </script>
+</body>
+</html>
